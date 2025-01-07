@@ -5,8 +5,8 @@ import java.util.List;
 
 public class OracleDBQuery {
     public static void main(String[] args) {
-        // Database connection details
-        String dbUrl = "jdbc:oracle:thin:@oprodexd.scan.ocwen.com:1503";
+        // Database connection details // change as per database details username and passwords 
+        String dbUrl = "jdbc:oracle:thin:@oprodexd.scan.ocwen.com:1503/cdmsprd.world";
         String dbUsername = "mahesh";
         String dbPassword = "root";
 
@@ -61,12 +61,14 @@ public class OracleDBQuery {
 
     // Execute query and write output to CSV
     private static void writeOutputCsv(Connection connection, List<String> inputValues, String outputCsv) throws SQLException, IOException {
-        String query = "SELECT * FROM your_table_name WHERE your_column_name = ?";
+
+        //change in below query as per requirement 
+        String query = "SELECT user_key_1,pg_id,user_key_5 FROM cdms.optimg01 WHERE user_key_3=1098 and user_key_1 = ?";
         try (PreparedStatement preparedStatement = connection.prepareStatement(query);
              BufferedWriter writer = new BufferedWriter(new FileWriter(outputCsv))) {
 
-            // Write header to output CSV
-            writer.write("Column1,Column2,Column3"); // Update with your actual column names
+            // Write header to output CSV // change as per requirement 
+            writer.write("user_key_1,pg_id,user_key_5"); // Update with your actual column names
             writer.newLine();
 
             for (String value : inputValues) {
@@ -74,13 +76,13 @@ public class OracleDBQuery {
                 ResultSet resultSet = preparedStatement.executeQuery();
 
                 while (resultSet.next()) {
-                    // Extract data from the result set
-                    String column1 = resultSet.getString("column1"); // Replace with actual column name
-                    String column2 = resultSet.getString("column2"); // Replace with actual column name
-                    String column3 = resultSet.getString("column3"); // Replace with actual column name
+                    // Extract data from the result set //add rows as below as per required to save details in output 
+                    String user_key_1 = resultSet.getString("user_key_1"); // Replace with actual column name
+                    String pg_id = resultSet.getString("pg_id"); // Replace with actual column name
+                    String user_key_5 = resultSet.getString("user_key_5"); // Replace with actual column name
 
-                    // Write to output CSV
-                    writer.write(column1 + "," + column2 + "," + column3);
+                    // Write to output CSV // add the rows you want to save in output as below 
+                    writer.write(user_key_1 + "," + pg_id + "," + user_key_5);
                     writer.newLine();
                 }
             }
