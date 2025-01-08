@@ -8,3 +8,7 @@ add/remove database column name as followed by line 80,81,82
 
 
 add/edit column names in outoput writter line 85
+
+
+
+finally ojdbc jar need to be added in project external library 
