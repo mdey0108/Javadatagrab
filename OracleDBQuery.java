@@ -2,49 +2,49 @@ import java.io.*;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 
-public class OracleDBQuery {
+public class OracleDBQueryMultiThreaded {
+    private static final int THREAD_COUNT = 10; // Adjust as per your CPU cores and database performance
+
     public static void main(String[] args) {
-        // Database connection details // change as per database details username and passwords 
         String dbUrl = "jdbc:oracle:thin:@oprodexd.scan.ocwen.com:1503/cdmsprd.world";
         String dbUsername = "mahesh";
         String dbPassword = "root";
-
-        // CSV file paths
-        String inputCsv = "input.csv"; // Path to input CSV file
-        String outputCsv = "output.csv"; // Path to output CSV file
-
-        Connection connection = null;
+        String inputCsv = "input.csv";
+        String outputCsv = "output.csv";
 
         try {
-            // Load Oracle JDBC Driver
             Class.forName("oracle.jdbc.driver.OracleDriver");
-
-            // Connect to the database
-            connection = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
-
-            // Read input CSV file
             List<String> inputValues = readInputCsv(inputCsv);
 
-            // Write output CSV file
-            writeOutputCsv(connection, inputValues, outputCsv);
+            ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+            List<Future<List<String>>> futures = new ArrayList<>();
 
+            int batchSize = (int) Math.ceil((double) inputValues.size() / THREAD_COUNT);
+            for (int i = 0; i < THREAD_COUNT; i++) {
+                int start = i * batchSize;
+                int end = Math.min(start + batchSize, inputValues.size());
+                if (start < end) {
+                    List<String> batch = inputValues.subList(start, end);
+                    futures.add(executor.submit(new QueryTask(dbUrl, dbUsername, dbPassword, batch)));
+                }
+            }
+
+            List<String> outputData = new ArrayList<>();
+            outputData.add("user_key_1,pg_id,user_key_5");
+            for (Future<List<String>> future : futures) {
+                outputData.addAll(future.get());
+            }
+
+            executor.shutdown();
+            writeOutputCsv(outputCsv, outputData);
             System.out.println("Data processing completed. Output written to: " + outputCsv);
         } catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            // Close the connection
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
         }
     }
 
-    // Read input CSV file and extract the first column values
     private static List<String> readInputCsv(String inputCsv) throws IOException {
         List<String> inputValues = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(inputCsv))) {
@@ -59,33 +59,51 @@ public class OracleDBQuery {
         return inputValues;
     }
 
-    // Execute query and write output to CSV
-    private static void writeOutputCsv(Connection connection, List<String> inputValues, String outputCsv) throws SQLException, IOException {
-
-        //change in below query as per requirement 
-        String query = "SELECT user_key_1,pg_id,user_key_5 FROM cdms.optimg01 WHERE user_key_3=1098 and user_key_1 = ?";
-        try (PreparedStatement preparedStatement = connection.prepareStatement(query);
-             BufferedWriter writer = new BufferedWriter(new FileWriter(outputCsv))) {
-
-            // Write header to output CSV // change as per requirement 
-            writer.write("user_key_1,pg_id,user_key_5"); // Update with your actual column names
-            writer.newLine();
-
-            for (String value : inputValues) {
-                preparedStatement.setString(1, value);
-                ResultSet resultSet = preparedStatement.executeQuery();
-
-                while (resultSet.next()) {
-                    // Extract data from the result set //add rows as below as per required to save details in output 
-                    String user_key_1 = resultSet.getString("user_key_1"); // Replace with actual column name
-                    String pg_id = resultSet.getString("pg_id"); // Replace with actual column name
-                    String user_key_5 = resultSet.getString("user_key_5"); // Replace with actual column name
-
-                    // Write to output CSV // add the rows you want to save in output as below 
-                    writer.write(user_key_1 + "," + pg_id + "," + user_key_5);
-                    writer.newLine();
-                }
+    private static void writeOutputCsv(String outputCsv, List<String> data) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputCsv))) {
+            for (String line : data) {
+                writer.write(line);
+                writer.newLine();
             }
         }
+    }
+}
+
+class QueryTask implements Callable<List<String>> {
+    private final String dbUrl;
+    private final String dbUsername;
+    private final String dbPassword;
+    private final List<String> inputValues;
+
+    public QueryTask(String dbUrl, String dbUsername, String dbPassword, List<String> inputValues) {
+        this.dbUrl = dbUrl;
+        this.dbUsername = dbUsername;
+        this.dbPassword = dbPassword;
+        this.inputValues = inputValues;
+    }
+
+    @Override
+    public List<String> call() {
+        List<String> outputData = new ArrayList<>();
+        String query = "SELECT user_key_1, pg_id, user_key_5 FROM cdms.optimg01 WHERE user_key_3=1098 AND user_key_1 = ?";
+        
+        try (Connection connection = DriverManager.getConnection(dbUrl, dbUsername, dbPassword);
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+            
+            for (String value : inputValues) {
+                preparedStatement.setString(1, value);
+                try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                    while (resultSet.next()) {
+                        String user_key_1 = resultSet.getString("user_key_1");
+                        String pg_id = resultSet.getString("pg_id");
+                        String user_key_5 = resultSet.getString("user_key_5");
+                        outputData.add(user_key_1 + "," + pg_id + "," + user_key_5);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return outputData;
     }
 }
